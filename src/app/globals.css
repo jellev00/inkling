@@ -7,8 +7,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-energy: var(--energy);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-player-1: var(--player-1);
+  --color-player-2: var(--player-2);
+  --color-player-3: var(--player-3);
+  --color-player-4: var(--player-4);
+  --color-player-5: var(--player-5);
+  --color-player-6: var(--player-6);
+  --font-sans: var(--font-inter);
+  --font-caveat: var(--font-caveat);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -55,8 +66,20 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #7C5CFC;
+  --primary-foreground: #FFFFFF;
+  --canvas: #FAFAF8;
+  --ink: #18181B;
+  --energy: #FF6B5C;
+  --success: #22C55E;
+  --error: #F43F5E;
+  /* spelerskleuren, roulerend toegewezen bij join in deze volgorde */
+  --player-1: #FF6B5C; /* Oranje */
+  --player-2: #7C5CFC; /* Paars */
+  --player-3: #22C55E; /* Groen */
+  --player-4: #347CD4; /* Blauw */
+  --player-5: #EC9634; /* Geel */
+  --player-6: #F43F5E; /* Roze */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
