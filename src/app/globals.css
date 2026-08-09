@@ -9,6 +9,7 @@
   --color-foreground: var(--foreground);
   --color-canvas: var(--canvas);
   --color-ink: var(--ink);
+  --color-neutral: var(--neutral);
   --color-energy: var(--energy);
   --color-success: var(--success);
   --color-error: var(--error);
@@ -70,6 +71,7 @@
   --primary-foreground: #FFFFFF;
   --canvas: #FAFAF8;
   --ink: #18181B;
+  --neutral: #B4B2A9;
   --energy: #FF6B5C;
   --success: #22C55E;
   --error: #F43F5E;
