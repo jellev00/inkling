@@ -72,13 +72,28 @@ Lokale SVG's, te vinden in `public/icons/`. Kopieer ze daar vóór je begint met
 
 ```
 rooms      → id, code, host_id, status, settings (jsonb), created_at
-players    → id, room_id, name, avatar_color, score, is_host, connected, joined_at
+players    → id, room_id, auth_user_id, name, avatar_color, score, is_host, connected, joined_at
 rounds     → id, room_id, round_number, drawer_id, word, status, started_at, ends_at
 guesses    → id, round_id, player_id, guess_text, correct, points_awarded, guessed_at
 drawings   → id, round_id, snapshot_svg   (optioneel, voor eindgalerij)
+words      → id, category, word
 ```
 
+### Woordenbank
+
+`words` (category, word) bevat de volledige woordenlijst. Deze tabel heeft
+RLS aan zonder select-policy — hij is dus NOOIT rechtstreeks leesbaar via
+de publieke anon-key, alleen via de service role key binnen een Edge
+Function. Dit voorkomt dat spelers de volledige woordenlijst vooraf kunnen
+opvragen via de browser.
+
+Voor de categorienamen in de UI is er een publieke view `word_categories`
+die alleen de categorienamen teruggeeft, nooit de woorden zelf. De UI mag
+altijd `word_categories` bevragen, nooit rechtstreeks `words`.
+
 Belangrijk: `rounds.word` mag via Row Level Security alleen leesbaar zijn voor de speler wiens `id` gelijk is aan `drawer_id` van die ronde. Dit is functioneel, geen nice-to-have — voorkom dat het woord via de browser devtools uitlekt naar gokkers.
+
+`players.id` is een door de database gegenereerde primary key, los van de auth-sessie — de kolom `players.auth_user_id` bevat de `user.id` uit Supabase Auth (zie anonieme login). Elke check "is dit de ingelogde gebruiker" (host, eigen speler, tekenaar) moet dus via `auth_user_id` lopen, niet via `players.id`. Omdat `rounds.drawer_id` verwijst naar `players.id`, moet de RLS-policy op `rounds.word` daarom via een join/subquery op `players.auth_user_id` gaan (`auth.uid() = (select auth_user_id from players where id = rounds.drawer_id)`), niet met een directe vergelijking.
 
 ## Realtime-architectuur
 
