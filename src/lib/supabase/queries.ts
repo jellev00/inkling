@@ -147,3 +147,86 @@ export async function updateRoomStatus(
     .select("id, code, host_id, status, settings, created_at")
     .single<Room>();
 }
+
+export type Round = {
+  id: string;
+  room_id: string;
+  round_number: number;
+  drawer_id: string;
+  status: string;
+  started_at: string | null;
+  ends_at: string | null;
+  word_length: number | null;
+};
+
+const ROUND_COLUMNS =
+  "id, room_id, round_number, drawer_id, status, started_at, ends_at, word_length";
+
+export async function createRound(
+  supabase: SupabaseClient,
+  params: { roomId: string; roundNumber: number; drawerId: string }
+) {
+  return supabase
+    .from("rounds")
+    .insert({
+      room_id: params.roomId,
+      round_number: params.roundNumber,
+      drawer_id: params.drawerId,
+      status: "choosing",
+    })
+    .select(ROUND_COLUMNS)
+    .single<Round>();
+}
+
+export async function deleteRound(supabase: SupabaseClient, roundId: string) {
+  return supabase.from("rounds").delete().eq("id", roundId);
+}
+
+export async function getCurrentRound(supabase: SupabaseClient, roomId: string) {
+  return supabase
+    .from("rounds")
+    .select(ROUND_COLUMNS)
+    .eq("room_id", roomId)
+    .order("round_number", { ascending: false })
+    .limit(1)
+    .maybeSingle<Round>();
+}
+
+// Slaat het gekozen woord op in round_words (nooit rechtstreeks leesbaar
+// door gokkers) en zet de ronde daarna op 'drawing' met word_length +
+// start-/eindtijd. Twee losse writes zonder DB-transactie — bij een
+// mislukte tweede write wordt de eerste best-effort teruggedraaid.
+export async function chooseRoundWord(
+  supabase: SupabaseClient,
+  params: { roundId: string; word: string; durationSeconds: number }
+) {
+  const { error: wordError } = await supabase
+    .from("round_words")
+    .insert({ round_id: params.roundId, word: params.word });
+
+  if (wordError) {
+    return { data: null, error: wordError };
+  }
+
+  const startedAt = new Date();
+  const endsAt = new Date(startedAt.getTime() + params.durationSeconds * 1000);
+
+  const { data, error } = await supabase
+    .from("rounds")
+    .update({
+      word_length: params.word.length,
+      status: "drawing",
+      started_at: startedAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+    })
+    .eq("id", params.roundId)
+    .select(ROUND_COLUMNS)
+    .single<Round>();
+
+  if (error) {
+    await supabase.from("round_words").delete().eq("round_id", params.roundId);
+    return { data: null, error };
+  }
+
+  return { data, error: null };
+}

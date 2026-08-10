@@ -5,15 +5,20 @@ import { useEffect, useState } from "react";
 import { PlayerAvatar, type PlayerColor } from "@/components/player-avatar";
 import { RoomcodeCard } from "@/components/roomcode-badge";
 import { ScreenHeader } from "@/components/screen-header";
+import { RoundScreen } from "@/components/screens/round-screen";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/supabase/session-context";
 import {
+  createRound,
+  deleteRound,
+  getCurrentRound,
   getRoomByCode,
   listPlayers,
   updateRoomStatus,
   type Player,
   type Room,
+  type Round,
 } from "@/lib/supabase/queries";
 
 function LobbyScreen({ code }: { code: string }) {
@@ -23,6 +28,7 @@ function LobbyScreen({ code }: { code: string }) {
   const [notFound, setNotFound] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [round, setRound] = useState<Round | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +55,16 @@ function LobbyScreen({ code }: { code: string }) {
       if (!active) return;
 
       setPlayers(playerRows ?? []);
+
+      if (roomData.status !== "lobby") {
+        const { data: roundData } = await getCurrentRound(
+          supabase,
+          roomData.id
+        );
+        if (!active) return;
+        setRound(roundData ?? null);
+      }
+
       setLoading(false);
     }
 
@@ -117,12 +133,39 @@ function LobbyScreen({ code }: { code: string }) {
           );
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "rounds",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          setRound(payload.new as Round);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rounds",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          setRound(payload.new as Round);
+        }
+      )
       .subscribe();
 
     return () => {
       channel.unsubscribe();
     };
-
+    // Alleen resubscriben wanneer de room zelf wisselt, niet bij elke
+    // status-/ronde-wijziging die dit effect via setRoom()/setRound() zelf
+    // veroorzaakt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id]);
 
   const isHost = players.some(
@@ -131,12 +174,26 @@ function LobbyScreen({ code }: { code: string }) {
   const gameStarted = room?.status !== undefined && room.status !== "lobby";
 
   async function handleStart() {
-    if (!room || starting) return;
+    if (!room || starting || players.length === 0) return;
 
     setStarting(true);
     setError(null);
 
     const supabase = createClient();
+    const drawer = players[Math.floor(Math.random() * players.length)];
+
+    const { data: newRound, error: roundError } = await createRound(
+      supabase,
+      { roomId: room.id, roundNumber: 1, drawerId: drawer.id }
+    );
+
+    if (roundError || !newRound) {
+      console.error("createRound failed:", roundError);
+      setError(roundError?.message ?? "Kon de ronde niet starten.");
+      setStarting(false);
+      return;
+    }
+
     const { error: updateError } = await updateRoomStatus(
       supabase,
       room.id,
@@ -145,11 +202,13 @@ function LobbyScreen({ code }: { code: string }) {
 
     if (updateError) {
       console.error("updateRoomStatus failed:", updateError);
+      await deleteRound(supabase, newRound.id);
       setError(updateError.message);
       setStarting(false);
       return;
     }
 
+    // room.status en de nieuwe ronde komen terug via het Realtime-kanaal.
   }
 
   if (loading) {
@@ -171,6 +230,12 @@ function LobbyScreen({ code }: { code: string }) {
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (gameStarted) {
+    return (
+      <RoundScreen room={room} round={round} players={players} userId={userId} />
     );
   }
 
@@ -209,11 +274,7 @@ function LobbyScreen({ code }: { code: string }) {
 
       {error && <p className="text-center text-sm text-error">{error}</p>}
 
-      {gameStarted ? (
-        <p className="text-center text-sm font-medium text-primary">
-          Het spel is gestart!
-        </p>
-      ) : isHost ? (
+      {isHost ? (
         <Button
           size="lg"
           className="h-14 w-full rounded-xl text-base font-bold"
