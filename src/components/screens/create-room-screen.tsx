@@ -39,6 +39,9 @@ function CreateRoomScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Mount-only client value (avoids a hydration mismatch from Math.random()
+    // running on both server and client with different results).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCode(generateRoomCode());
   }, []);
 

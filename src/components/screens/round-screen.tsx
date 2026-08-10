@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
 import { ScreenHeader } from "@/components/screen-header";
+import { GameScreen } from "@/components/screens/game-screen";
 import { WordChoiceScreen } from "@/components/screens/word-choice-screen";
 import { createClient } from "@/lib/supabase/client";
 import { chooseRoundWord, type Player, type Room, type Round } from "@/lib/supabase/queries";
@@ -16,6 +19,8 @@ function RoundScreen({
   players: Player[];
   userId: string | null;
 }) {
+  const [chosenWord, setChosenWord] = useState<string | null>(null);
+
   const myPlayer = players.find((player) => player.auth_user_id === userId);
   const drawer = players.find((player) => player.id === round?.drawer_id);
   const isDrawer = Boolean(
@@ -33,6 +38,8 @@ function RoundScreen({
     });
 
     if (error) throw error;
+
+    setChosenWord(word);
     // round.status komt terug op 'drawing' via het Realtime-kanaal.
   }
 
@@ -63,21 +70,14 @@ function RoundScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
-      <ScreenHeader />
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-        <p className="text-lg font-bold text-ink">Ronde gestart!</p>
-        {round.word_length && (
-          <p className="text-2xl tracking-widest text-neutral">
-            {"_ ".repeat(round.word_length).trim()} ({round.word_length})
-          </p>
-        )}
-        <p className="text-xs text-neutral">
-          Teken- en raadscherm volgt nog — dit bevestigt dat de rondewissel
-          werkt.
-        </p>
-      </div>
-    </div>
+    <GameScreen
+      room={room}
+      round={round}
+      players={players}
+      userId={userId}
+      isDrawer={isDrawer}
+      word={isDrawer ? chosenWord : null}
+    />
   );
 }
 

@@ -26,8 +26,6 @@ function WordChoiceScreen({
 
   useEffect(() => {
     let active = true;
-    setChoices(null);
-    setLoadError(null);
 
     async function load() {
       const supabase = createClient();
@@ -40,10 +38,12 @@ function WordChoiceScreen({
 
       if (error || !Array.isArray(data)) {
         console.error("get-word-choices failed:", error);
+        setChoices(null);
         setLoadError("Kon geen woordkeuzes ophalen.");
         return;
       }
 
+      setLoadError(null);
       setChoices(data as string[]);
       setRemainingMs(CHOOSE_DURATION_MS);
     }
@@ -76,9 +76,12 @@ function WordChoiceScreen({
 
   // Altijd de laatste submitWord aanroepen vanuit de interval-callback,
   // zonder dat die functie zelf in de effect-dependencies hoeft te staan
-  // (anders herstart de timer bij elke re-render).
+  // (anders herstart de timer bij elke re-render). De ref wordt na render
+  // bijgewerkt via een effect, niet tijdens render zelf.
   const submitRef = useRef(submitWord);
-  submitRef.current = submitWord;
+  useEffect(() => {
+    submitRef.current = submitWord;
+  });
 
   useEffect(() => {
     if (!choices || selected) return;
@@ -114,7 +117,10 @@ function WordChoiceScreen({
           <p className="text-sm text-error">{loadError}</p>
           <Button
             className="rounded-xl"
-            onClick={() => setReloadKey((key) => key + 1)}
+            onClick={() => {
+              setLoadError(null);
+              setReloadKey((key) => key + 1);
+            }}
           >
             Opnieuw proberen
           </Button>
