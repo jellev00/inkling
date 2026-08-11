@@ -3,26 +3,39 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
-type ChatMessage =
-  | { id: string; playerName: string; correct: true }
-  | { id: string; playerName: string; correct: false; text: string };
+type GuessBroadcastPayload =
+  | { playerName: string; correct: true }
+  | { playerName: string; correct: false; text: string };
 
-// Berichten komen uitsluitend binnen via de round-${roundId}-chat
-// broadcast — ook voor je eigen gok, zodat de weergegeven punten/juistheid
-// altijd overeenkomen met wat de server (submit-guess) heeft bepaald.
+type ChatMessage = {
+  id: string;
+  playerName: string;
+  status: "pending" | "correct" | "incorrect" | "failed";
+  // Ontbreekt voor andermans correcte gok (het woord lekt niet), wel
+  // aanwezig voor je eigen (nog) pending gok, andermans foute gok, en je
+  // eigen bevestigd-foute gok.
+  text?: string;
+};
+
+// Berichten van andere spelers komen uitsluitend binnen via de
+// round-${roundId}-chat broadcast. Je eigen gok verschijnt optimistic al
+// vóór de submit-guess-aanroep klaar is, en wordt bijgewerkt zodra de
+// bijbehorende broadcast (of een foutmelding) terugkomt — zo blijft de
+// weergegeven correctheid/punten uiteindelijk altijd wat de server bepaalt.
 function GuessPanel({
   roundId,
   canGuess,
+  myName,
 }: {
   roundId: string;
   canGuess: boolean;
+  myName: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [value, setValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const messageIdRef = useRef(0);
 
   useEffect(() => {
@@ -30,11 +43,38 @@ function GuessPanel({
     const channel = supabase
       .channel(`round-${roundId}-chat`)
       .on("broadcast", { event: "guess" }, ({ payload }) => {
-        messageIdRef.current += 1;
-        setMessages((current) => [
-          ...current,
-          { id: `${messageIdRef.current}`, ...payload } as ChatMessage,
-        ]);
+        const data = payload as GuessBroadcastPayload;
+
+        setMessages((current) => {
+          // Eigen, nog niet bevestigde gok? Werk die in-place bij i.p.v.
+          // een dubbel bericht toe te voegen.
+          const pendingIndex = current.findIndex(
+            (message) =>
+              message.status === "pending" &&
+              message.playerName === data.playerName
+          );
+
+          if (pendingIndex !== -1) {
+            const updated = [...current];
+            updated[pendingIndex] = {
+              ...updated[pendingIndex],
+              status: data.correct ? "correct" : "incorrect",
+              text: data.correct ? undefined : data.text,
+            };
+            return updated;
+          }
+
+          messageIdRef.current += 1;
+          return [
+            ...current,
+            {
+              id: `remote-${messageIdRef.current}`,
+              playerName: data.playerName,
+              status: data.correct ? "correct" : "incorrect",
+              text: data.correct ? undefined : data.text,
+            },
+          ];
+        });
       })
       .subscribe();
 
@@ -46,11 +86,15 @@ function GuessPanel({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = value.trim();
-    if (!trimmed || submitting) return;
+    if (!trimmed) return;
 
-    setSubmitting(true);
-    setError(null);
     setValue("");
+
+    const clientId = crypto.randomUUID();
+    setMessages((current) => [
+      ...current,
+      { id: clientId, playerName: myName, status: "pending", text: trimmed },
+    ]);
 
     const supabase = createClient();
     const { error: invokeError } = await supabase.functions.invoke(
@@ -58,11 +102,18 @@ function GuessPanel({
       { body: { round_id: roundId, guess_text: trimmed } }
     );
 
+    // Bij succes wordt dit bericht bijgewerkt zodra de round-chat broadcast
+    // binnenkomt (zie het effect hierboven) — de server bepaalt correct/
+    // incorrect autoritatief, niet deze response.
     if (invokeError) {
-      setError("Kon je gok niet versturen, probeer opnieuw.");
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === clientId
+            ? { ...message, status: "failed" }
+            : message
+        )
+      );
     }
-
-    setSubmitting(false);
   }
 
   return (
@@ -71,19 +122,34 @@ function GuessPanel({
         {messages.length === 0 ? (
           <p className="text-sm text-neutral">Nog geen gokken...</p>
         ) : (
-          messages.map((message) =>
-            message.correct ? (
-              <p key={message.id} className="text-sm text-success">
-                <span className="font-bold">{message.playerName}</span> heeft
-                het geraden!
-              </p>
-            ) : (
-              <p key={message.id} className="text-sm text-ink">
+          messages.map((message) => {
+            if (message.status === "correct") {
+              return (
+                <p key={message.id} className="text-sm text-success">
+                  <span className="font-bold">{message.playerName}</span>{" "}
+                  heeft het geraden!
+                </p>
+              );
+            }
+
+            return (
+              <p
+                key={message.id}
+                className={cn(
+                  "text-sm",
+                  message.status === "failed"
+                    ? "text-error"
+                    : message.status === "pending"
+                      ? "text-neutral"
+                      : "text-ink"
+                )}
+              >
                 <span className="font-bold">{message.playerName}:</span>{" "}
                 {message.text}
+                {message.status === "failed" && " (versturen mislukt)"}
               </p>
-            )
-          )
+            );
+          })
         )}
       </div>
 
@@ -96,10 +162,8 @@ function GuessPanel({
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder="Type je antwoord..."
-            disabled={submitting}
             className="h-11 rounded-xl border-none bg-ink px-4 text-white placeholder:text-white/40 focus-visible:ring-primary/50"
           />
-          {error && <p className="mt-2 text-xs text-error">{error}</p>}
         </form>
       )}
     </div>

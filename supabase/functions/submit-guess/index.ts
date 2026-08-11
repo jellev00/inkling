@@ -124,12 +124,21 @@ Deno.serve(async (req) => {
     );
   }
 
-  const { data: player, error: playerError } = await supabase
-    .from("players")
-    .select("id, name")
-    .eq("room_id", round.room_id)
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
+  // Het ronde-woord opzoeken en de drawer-check (die zelf een player-fetch
+  // vereist) hangen niet van elkaar af — parallel ophalen scheelt een
+  // volledige netwerk-roundtrip t.o.v. na elkaar.
+  const [roundWordResult, playerResult] = await Promise.all([
+    supabase.from("round_words").select("word").eq("round_id", round_id).single(),
+    supabase
+      .from("players")
+      .select("id, name")
+      .eq("room_id", round.room_id)
+      .eq("auth_user_id", authData.user.id)
+      .maybeSingle(),
+  ]);
+
+  const { data: roundWord, error: roundWordError } = roundWordResult;
+  const { data: player, error: playerError } = playerResult;
 
   if (playerError || !player) {
     return jsonResponse(
@@ -146,12 +155,6 @@ Deno.serve(async (req) => {
     );
   }
 
-  const { data: roundWord, error: roundWordError } = await supabase
-    .from("round_words")
-    .select("word")
-    .eq("round_id", round_id)
-    .single();
-
   if (roundWordError || !roundWord) {
     return jsonResponse({ error: "Woord niet gevonden voor deze ronde." }, 404);
   }
@@ -166,27 +169,10 @@ Deno.serve(async (req) => {
   if (correct) {
     const points = calculatePoints(round.started_at, round.ends_at, Date.now());
 
-    const { error: guessError } = await supabase.from("guesses").insert({
-      round_id,
-      player_id: player.id,
-      guess_text: trimmedGuess,
-      correct: true,
-      points_awarded: points,
-    });
-
-    if (guessError) {
-      return jsonResponse({ error: "Kon de gok niet opslaan." }, 500);
-    }
-
-    const { error: scoreError } = await addToScore(supabase, player.id, points);
-    if (scoreError) {
-      return jsonResponse({ error: "Kon de score niet bijwerken." }, 500);
-    }
-
-    // Best-effort: de tekenaar krijgt een klein bonuspunt per correcte gok.
-    // Dit mag de response aan de gokker niet blokkeren als het misgaat.
-    await addToScore(supabase, round.drawer_id, DRAWER_BONUS_POINTS);
-
+    // De broadcast bepaalt de live-ervaring van alle spelers, dus die gaat
+    // als eerste uit zodra correct/incorrect vaststaat. De guesses-rij en
+    // de score-writes hieronder gebeuren pas erna, in de achtergrond — de
+    // response (en dus de UX) hoeft niet op die DB-writes te wachten.
     // Nooit het woord zelf meesturen — enkel dat er correct geraden werd.
     await chatChannel.send({
       type: "broadcast",
@@ -194,27 +180,66 @@ Deno.serve(async (req) => {
       payload: { playerName: player.name, correct: true },
     });
 
+    EdgeRuntime.waitUntil(
+      (async () => {
+        const { error: guessError } = await supabase.from("guesses").insert({
+          round_id,
+          player_id: player.id,
+          guess_text: trimmedGuess,
+          correct: true,
+          points_awarded: points,
+        });
+        if (guessError) {
+          console.error("Kon guess niet opslaan:", guessError);
+        }
+
+        const { error: scoreError } = await addToScore(
+          supabase,
+          player.id,
+          points
+        );
+        if (scoreError) {
+          console.error("Kon score van gokker niet bijwerken:", scoreError);
+        }
+
+        // Best-effort: de tekenaar krijgt een klein bonuspunt per correcte
+        // gok. Fouten hierin mogen de rest niet blokkeren.
+        const { error: bonusError } = await addToScore(
+          supabase,
+          round.drawer_id,
+          DRAWER_BONUS_POINTS
+        );
+        if (bonusError) {
+          console.error("Kon bonus van tekenaar niet bijwerken:", bonusError);
+        }
+      })()
+    );
+
     return jsonResponse({ correct: true, points });
   }
 
-  const { error: guessError } = await supabase.from("guesses").insert({
-    round_id,
-    player_id: player.id,
-    guess_text: trimmedGuess,
-    correct: false,
-    points_awarded: 0,
-  });
-
-  if (guessError) {
-    return jsonResponse({ error: "Kon de gok niet opslaan." }, 500);
-  }
-
   // Fout geraden lekt niets, dus het gokwoord zelf mag mee in de broadcast.
+  // Ook hier: broadcast eerst, de guesses-rij erna in de achtergrond.
   await chatChannel.send({
     type: "broadcast",
     event: "guess",
     payload: { playerName: player.name, correct: false, text: trimmedGuess },
   });
+
+  EdgeRuntime.waitUntil(
+    (async () => {
+      const { error: guessError } = await supabase.from("guesses").insert({
+        round_id,
+        player_id: player.id,
+        guess_text: trimmedGuess,
+        correct: false,
+        points_awarded: 0,
+      });
+      if (guessError) {
+        console.error("Kon guess niet opslaan:", guessError);
+      }
+    })()
+  );
 
   return jsonResponse({ correct: false });
 });

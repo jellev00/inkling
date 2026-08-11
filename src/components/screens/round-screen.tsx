@@ -74,6 +74,7 @@ function RoundScreen({
       room={room}
       round={round}
       players={players}
+      userId={userId}
       isDrawer={isDrawer}
       word={isDrawer ? chosenWord : null}
     />
