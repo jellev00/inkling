@@ -4,16 +4,17 @@ import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/icon";
 import { PlayerAvatar, type PlayerColor } from "@/components/player-avatar";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
+  createRound,
   listRoundGuesses,
   type Player,
+  type Room,
   type Round,
   type RoundGuess,
 } from "@/lib/supabase/queries";
 import { cn } from "@/lib/utils";
-
-const NEXT_ROUND_COUNTDOWN_SECONDS = 3;
 
 // Moet gelijk blijven aan DRAWER_BONUS_POINTS in
 // supabase/functions/submit-guess/index.ts — dat is waar dit bedrag
@@ -26,16 +27,22 @@ const DRAWER_BONUS_POINTS = 5;
 // een refresh), dus iedereen haalt het via get-round-word op — die geeft
 // het woord pas terug zodra rounds.status effectief 'reveal' is.
 function RevealScreen({
+  room,
   round,
   players,
+  isHost,
 }: {
+  room: Room;
   round: Round;
   players: Player[];
+  isHost: boolean;
 }) {
   const [word, setWord] = useState<string | null>(null);
   const [wordError, setWordError] = useState<string | null>(null);
   const [guesses, setGuesses] = useState<RoundGuess[] | null>(null);
-  const [countdown, setCountdown] = useState(NEXT_ROUND_COUNTDOWN_SECONDS);
+  const [startingNextRound, setStartingNextRound] = useState(false);
+  const [nextRoundError, setNextRoundError] = useState<string | null>(null);
+  const [gameEnded, setGameEnded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -75,13 +82,47 @@ function RevealScreen({
     };
   }, [round.id]);
 
-  // Puur cosmetisch aftellen — de daadwerkelijke overgang naar de
-  // volgende ronde wordt in een volgende stap gebouwd.
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const id = window.setTimeout(() => setCountdown((s) => s - 1), 1000);
-    return () => window.clearTimeout(id);
-  }, [countdown]);
+  async function handleNextRound() {
+    if (startingNextRound) return;
+
+    // Laatste ronde gespeeld: de echte eindstand-flow is een aparte stap,
+    // dit is voorlopig enkel een lokale placeholder voor de host die op de
+    // knop klikte.
+    if (round.round_number >= room.settings.rounds) {
+      setGameEnded(true);
+      return;
+    }
+
+    setStartingNextRound(true);
+    setNextRoundError(null);
+
+    // Iedereen behalve de net afgelopen tekenaar komt in aanmerking; bij
+    // precies 2 spelers is dat vanzelfsprekend altijd de ander.
+    const eligibleDrawers = players.filter(
+      (player) => player.id !== round.drawer_id
+    );
+    const drawerPool = eligibleDrawers.length > 0 ? eligibleDrawers : players;
+    const nextDrawer =
+      drawerPool[Math.floor(Math.random() * drawerPool.length)];
+
+    const supabase = createClient();
+    const { error } = await createRound(supabase, {
+      roomId: room.id,
+      roundNumber: round.round_number + 1,
+      drawerId: nextDrawer.id,
+    });
+
+    if (error) {
+      console.error("createRound failed:", error);
+      setNextRoundError("Kon de volgende ronde niet starten.");
+      setStartingNextRound(false);
+      return;
+    }
+
+    // De nieuwe rij in `rounds` komt terug via het bestaande Realtime-
+    // kanaal, dat bij iedereen (inclusief deze host) het introscherm
+    // triggert.
+  }
 
   const guessesByPlayer = new Map<string, RoundGuess[]>();
   for (const guess of guesses ?? []) {
@@ -199,9 +240,28 @@ function RevealScreen({
         })}
       </div>
 
-      <p className="text-center text-sm text-neutral">
-        Volgende ronde begint over {countdown}...
-      </p>
+      {gameEnded ? (
+        <p className="text-center text-sm font-medium text-ink">
+          Spel afgelopen
+        </p>
+      ) : isHost ? (
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            className="h-12 w-full rounded-xl text-base font-bold"
+            disabled={startingNextRound}
+            onClick={handleNextRound}
+          >
+            {startingNextRound ? "Even geduld…" : "Volgende ronde"}
+          </Button>
+          {nextRoundError && (
+            <p className="text-center text-sm text-error">{nextRoundError}</p>
+          )}
+        </div>
+      ) : (
+        <p className="text-center text-sm text-neutral">
+          Wachten tot de host de volgende ronde start...
+        </p>
+      )}
     </div>
   );
 }
