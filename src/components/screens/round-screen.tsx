@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ScreenHeader } from "@/components/screen-header";
 import { GameScreen } from "@/components/screens/game-screen";
+import { RevealScreen } from "@/components/screens/reveal-screen";
 import { WordChoiceScreen } from "@/components/screens/word-choice-screen";
 import { createClient } from "@/lib/supabase/client";
 import { chooseRoundWord, type Player, type Room, type Round } from "@/lib/supabase/queries";
@@ -67,6 +68,10 @@ function RoundScreen({
         </div>
       </div>
     );
+  }
+
+  if (round.status === "reveal") {
+    return <RevealScreen round={round} players={players} />;
   }
 
   return (

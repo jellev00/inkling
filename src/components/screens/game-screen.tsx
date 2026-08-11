@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CanvasBoard } from "@/components/canvas-board";
 import { Icon } from "@/components/icon";
@@ -11,7 +11,8 @@ import { GuessPanel } from "@/components/screens/guess-panel";
 import { Badge } from "@/components/ui/badge";
 import { WordSlots } from "@/components/word-slots";
 import { isMuted, setMuted as persistMuted } from "@/lib/sound";
-import type { Player, Room, Round } from "@/lib/supabase/queries";
+import { createClient } from "@/lib/supabase/client";
+import { revealRound, type Player, type Room, type Round } from "@/lib/supabase/queries";
 
 function GameScreen({
   room,
@@ -32,6 +33,26 @@ function GameScreen({
 
   const myPlayer = players.find((player) => player.auth_user_id === userId);
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+
+  // Andere oorzaak (iedereen al geraden) wordt server-side afgehandeld in
+  // submit-guess. Dit dekt het geval waarin de tijd gewoon verstrijkt —
+  // alleen de tekenaar-client mag dit updaten (RLS "drawer updates own
+  // round"), dus deze timer draait uitsluitend bij de tekenaar.
+  useEffect(() => {
+    if (!isDrawer || round.status !== "drawing" || !round.ends_at) return;
+
+    const supabase = createClient();
+    const delayMs = new Date(round.ends_at).getTime() - Date.now();
+
+    const timeoutId = window.setTimeout(
+      () => {
+        void revealRound(supabase, round.id);
+      },
+      Math.max(delayMs, 0)
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isDrawer, round.id, round.status, round.ends_at]);
 
   const letters = isDrawer
     ? (word ?? "").split("")

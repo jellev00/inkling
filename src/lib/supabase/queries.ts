@@ -230,3 +230,42 @@ export async function chooseRoundWord(
 
   return { data, error: null };
 }
+
+// Alleen de tekenaar van de ronde mag dit (RLS-policy "drawer updates own
+// round"); wordt aangeroepen door de tekenaar-client zodra rounds.ends_at
+// verstreken is.
+export async function revealRound(supabase: SupabaseClient, roundId: string) {
+  return supabase
+    .from("rounds")
+    .update({ status: "reveal" })
+    .eq("id", roundId)
+    .select(ROUND_COLUMNS)
+    .single<Round>();
+}
+
+// Het woord zelf (guess_text) wordt hier bewust niet opgevraagd — deze
+// lijst wordt gebruikt om per speler de scoretoename van de ronde te
+// berekenen, niet om de gok-inhoud te tonen.
+export type RoundGuess = {
+  id: string;
+  round_id: string;
+  player_id: string;
+  correct: boolean;
+  points_awarded: number;
+  guessed_at: string;
+};
+
+const ROUND_GUESS_COLUMNS =
+  "id, round_id, player_id, correct, points_awarded, guessed_at";
+
+export async function listRoundGuesses(
+  supabase: SupabaseClient,
+  roundId: string
+) {
+  return supabase
+    .from("guesses")
+    .select(ROUND_GUESS_COLUMNS)
+    .eq("round_id", roundId)
+    .order("guessed_at", { ascending: true })
+    .overrideTypes<RoundGuess[], { merge: false }>();
+}

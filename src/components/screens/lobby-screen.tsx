@@ -137,6 +137,25 @@ function LobbyScreen({ code }: { code: string }) {
       .on(
         "postgres_changes",
         {
+          event: "UPDATE",
+          schema: "public",
+          table: "players",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          // Vangt o.a. score-wijzigingen op die submit-guess server-side
+          // doorvoert — zonder dit blijft het scorebord stil staan.
+          const updatedPlayer = payload.new as Player;
+          setPlayers((current) =>
+            current.map((player) =>
+              player.id === updatedPlayer.id ? updatedPlayer : player
+            )
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "INSERT",
           schema: "public",
           table: "rounds",

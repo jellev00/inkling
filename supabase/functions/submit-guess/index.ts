@@ -1,6 +1,17 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// De ambient `EdgeRuntime`-namespace uit edge-runtime.d.ts hierboven komt
+// niet globaal binnen zodra dat bestand als ES-module wordt geïmporteerd
+// (deno check ziet het dan als lokaal aan die module) — dit is een echte
+// runtime-global van de Supabase Edge Runtime, dus declareren we 'm hier
+// zelf zodat de checker 'm herkent.
+declare global {
+  const EdgeRuntime: {
+    waitUntil<T>(promise: Promise<T>): Promise<T>;
+  };
+}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -40,7 +51,7 @@ function calculatePoints(
 // Geen DB-transactie beschikbaar in deze setup — zelfde niet-atomaire
 // read-then-write-aanpak als chooseRoundWord() elders in het project.
 async function addToScore(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   playerId: string,
   delta: number
 ) {
@@ -60,6 +71,58 @@ async function addToScore(
     .eq("id", playerId);
 
   return { error: writeError };
+}
+
+// Tweede manier waarop een ronde naar 'reveal' gaat (naast de tekenaar-
+// client die dit doet zodra rounds.ends_at verstrijkt): iedereen die niet
+// de tekenaar is, heeft al correct geraden. Service role client omzeilt
+// RLS hier bewust — er is geen policy die gokkers dit laat updaten.
+async function revealIfEveryoneGuessed(
+  supabase: SupabaseClient,
+  roundId: string,
+  roomId: string,
+  drawerId: string
+) {
+  const [correctGuessesResult, guesserCountResult] = await Promise.all([
+    supabase
+      .from("guesses")
+      .select("player_id")
+      .eq("round_id", roundId)
+      .eq("correct", true),
+    supabase
+      .from("players")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .neq("id", drawerId),
+  ]);
+
+  if (correctGuessesResult.error || guesserCountResult.error) {
+    console.error(
+      "Kon niet controleren of iedereen al geraden had:",
+      correctGuessesResult.error ?? guesserCountResult.error
+    );
+    return;
+  }
+
+  const uniqueCorrectPlayerIds = new Set(
+    (correctGuessesResult.data ?? []).map(
+      (guess) => (guess as { player_id: string }).player_id
+    )
+  );
+  const guesserCount = guesserCountResult.count ?? 0;
+
+  if (guesserCount === 0 || uniqueCorrectPlayerIds.size < guesserCount) {
+    return;
+  }
+
+  const { error: revealError } = await supabase
+    .from("rounds")
+    .update({ status: "reveal" })
+    .eq("id", roundId);
+
+  if (revealError) {
+    console.error("Kon ronde niet op reveal zetten:", revealError);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -212,6 +275,8 @@ Deno.serve(async (req) => {
         if (bonusError) {
           console.error("Kon bonus van tekenaar niet bijwerken:", bonusError);
         }
+
+        await revealIfEveryoneGuessed(supabase, round_id, round.room_id, round.drawer_id);
       })()
     );
 
