@@ -16,20 +16,17 @@ function GameScreen({
   room,
   round,
   players,
-  userId,
   isDrawer,
   word,
 }: {
   room: Room;
   round: Round;
   players: Player[];
-  userId: string | null;
   isDrawer: boolean;
   word: string | null;
 }) {
   const [muted, setMuted] = useState(false);
 
-  const myPlayer = players.find((player) => player.auth_user_id === userId);
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   const letters = isDrawer
@@ -77,7 +74,7 @@ function GameScreen({
             </p>
           )}
 
-          <CanvasBoard interactive={isDrawer} />
+          <CanvasBoard interactive={isDrawer} roundId={round.id} />
         </div>
 
         <div className="flex w-full flex-col gap-4 lg:w-80">
@@ -108,7 +105,7 @@ function GameScreen({
             ))}
           </div>
 
-          <GuessPanel canGuess={!isDrawer} myName={myPlayer?.name ?? "Jij"} />
+          <GuessPanel roundId={round.id} canGuess={!isDrawer} />
         </div>
       </div>
     </div>
