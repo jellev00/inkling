@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { playSound } from "@/lib/sound";
 
 type GuessBroadcastPayload =
   | { playerName: string; correct: true }
@@ -44,6 +45,12 @@ function GuessPanel({
       .channel(`round-${roundId}-chat`)
       .on("broadcast", { event: "guess" }, ({ payload }) => {
         const data = payload as GuessBroadcastPayload;
+
+        // Voor iedereen in de ronde — tekenaar én raders — zodra de
+        // correcte-gok-broadcast binnenkomt, ongeacht wie er raadde.
+        if (data.correct) {
+          playSound("correct");
+        }
 
         setMessages((current) => {
           // Eigen, nog niet bevestigde gok? Werk die in-place bij i.p.v.

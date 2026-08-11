@@ -10,6 +10,7 @@ import { RoundTimer } from "@/components/round-timer";
 import { GuessPanel } from "@/components/screens/guess-panel";
 import { Badge } from "@/components/ui/badge";
 import { WordSlots } from "@/components/word-slots";
+import { isMuted, setMuted as persistMuted } from "@/lib/sound";
 import type { Player, Room, Round } from "@/lib/supabase/queries";
 
 function GameScreen({
@@ -27,7 +28,7 @@ function GameScreen({
   isDrawer: boolean;
   word: string | null;
 }) {
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(isMuted);
 
   const myPlayer = players.find((player) => player.auth_user_id === userId);
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
@@ -55,7 +56,13 @@ function GameScreen({
           <button
             type="button"
             aria-label={muted ? "Geluid aan" : "Geluid uit"}
-            onClick={() => setMuted((current) => !current)}
+            onClick={() =>
+              setMuted((current) => {
+                const next = !current;
+                persistMuted(next);
+                return next;
+              })
+            }
             className="text-neutral transition-colors hover:text-ink"
           >
             <Icon

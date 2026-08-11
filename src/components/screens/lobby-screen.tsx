@@ -7,6 +7,7 @@ import { RoomcodeCard } from "@/components/roomcode-badge";
 import { ScreenHeader } from "@/components/screen-header";
 import { RoundScreen } from "@/components/screens/round-screen";
 import { Button } from "@/components/ui/button";
+import { playSound } from "@/lib/sound";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/supabase/session-context";
 import {
@@ -154,7 +155,16 @@ function LobbyScreen({ code }: { code: string }) {
           filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          setRound(payload.new as Round);
+          const nextRound = payload.new as Round;
+          setRound((current) => {
+            // Eén plek voor het rondegeluid, ongeacht de oorzaak van de
+            // overgang naar 'reveal' (tijd verstreken of iedereen geraden)
+            // — beide resulteren hier in dezelfde status-update.
+            if (nextRound.status === "reveal" && current?.status !== "reveal") {
+              playSound("roundEnd");
+            }
+            return nextRound;
+          });
         }
       )
       .subscribe();
