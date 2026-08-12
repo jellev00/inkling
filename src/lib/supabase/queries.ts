@@ -28,10 +28,11 @@ export type Player = {
   is_host: boolean;
   connected: boolean;
   joined_at: string;
+  left_at: string | null;
 };
 
 const PLAYER_COLUMNS =
-  "id, room_id, auth_user_id, name, avatar_color, score, is_host, connected, joined_at";
+  "id, room_id, auth_user_id, name, avatar_color, score, is_host, connected, joined_at, left_at";
 
 export async function getRoomByCode(supabase: SupabaseClient, code: string) {
   return supabase
@@ -84,7 +85,8 @@ export async function getPlayerCount(supabase: SupabaseClient, roomId: string) {
   const { count } = await supabase
     .from("players")
     .select("id", { count: "exact", head: true })
-    .eq("room_id", roomId);
+    .eq("room_id", roomId)
+    .is("left_at", null);
   return count ?? 0;
 }
 
@@ -113,6 +115,9 @@ export async function addPlayer(
     .single<Player>();
 }
 
+// Filtert bewust niet op left_at: JoinRoomScreen gebruikt dit om te
+// bepalen of een (room_id, auth_user_id)-combinatie al bestaat — ook als
+// die eerder vertrokken is — om te kiezen tussen updaten en invoegen.
 export async function getPlayerByAuthUserId(
   supabase: SupabaseClient,
   roomId: string,
@@ -126,11 +131,48 @@ export async function getPlayerByAuthUserId(
     .maybeSingle<Player>();
 }
 
+// Soft-delete: de players-rij blijft bestaan (scores/gokken uit eerdere
+// rondes moeten intact blijven), enkel left_at wordt gezet. Elders wordt
+// een niet-lege left_at gebruikt om de speler uit zichtbare lijsten te
+// filteren.
+export async function markPlayerLeft(
+  supabase: SupabaseClient,
+  roomId: string,
+  authUserId: string
+) {
+  return supabase
+    .from("players")
+    .update({ left_at: new Date().toISOString() })
+    .eq("room_id", roomId)
+    .eq("auth_user_id", authUserId);
+}
+
+// Zet een eerder vertrokken speler weer op actief bij het opnieuw joinen
+// via dezelfde (room_id, auth_user_id) — voorkomt de duplicate-key-fout
+// van een nieuwe insert-poging.
+export async function rejoinPlayer(
+  supabase: SupabaseClient,
+  playerId: string,
+  params: { name: string; avatarColor: PlayerColor }
+) {
+  return supabase
+    .from("players")
+    .update({
+      name: params.name,
+      avatar_color: params.avatarColor,
+      left_at: null,
+    })
+    .eq("id", playerId)
+    .select(PLAYER_COLUMNS)
+    .single<Player>();
+}
+
 export async function listPlayers(supabase: SupabaseClient, roomId: string) {
   return supabase
     .from("players")
     .select(PLAYER_COLUMNS)
     .eq("room_id", roomId)
+    .is("left_at", null)
     .order("joined_at")
     .overrideTypes<Player[], { merge: false }>();
 }
@@ -268,4 +310,57 @@ export async function listRoundGuesses(
     .eq("round_id", roundId)
     .order("guessed_at", { ascending: true })
     .overrideTypes<RoundGuess[], { merge: false }>();
+}
+
+// Zet een afgelopen spel terug naar een verse lobby: rounds verwijderen
+// cascadeert automatisch naar round_words, maar guesses heeft een eigen FK
+// naar rounds zonder cascade — die moeten dus eerst expliciet weg, anders
+// faalt het verwijderen van rounds op die foreign key.
+export async function restartGame(supabase: SupabaseClient, roomId: string) {
+  const { data: rounds, error: roundsError } = await supabase
+    .from("rounds")
+    .select("id")
+    .eq("room_id", roomId);
+
+  if (roundsError) {
+    return { error: roundsError };
+  }
+
+  const roundIds = (rounds ?? []).map((round) => (round as { id: string }).id);
+
+  if (roundIds.length > 0) {
+    const { error: guessesError } = await supabase
+      .from("guesses")
+      .delete()
+      .in("round_id", roundIds);
+
+    if (guessesError) {
+      return { error: guessesError };
+    }
+
+    const { error: deleteRoundsError } = await supabase
+      .from("rounds")
+      .delete()
+      .in("id", roundIds);
+
+    if (deleteRoundsError) {
+      return { error: deleteRoundsError };
+    }
+  }
+
+  const { error: scoreError } = await supabase
+    .from("players")
+    .update({ score: 0 })
+    .eq("room_id", roomId);
+
+  if (scoreError) {
+    return { error: scoreError };
+  }
+
+  const { error: statusError } = await supabase
+    .from("rooms")
+    .update({ status: "lobby" })
+    .eq("id", roomId);
+
+  return { error: statusError };
 }

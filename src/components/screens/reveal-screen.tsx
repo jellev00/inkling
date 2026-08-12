@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   createRound,
   listRoundGuesses,
+  updateRoomStatus,
   type Player,
   type Room,
   type Round,
@@ -42,7 +43,8 @@ function RevealScreen({
   const [guesses, setGuesses] = useState<RoundGuess[] | null>(null);
   const [startingNextRound, setStartingNextRound] = useState(false);
   const [nextRoundError, setNextRoundError] = useState<string | null>(null);
-  const [gameEnded, setGameEnded] = useState(false);
+
+  const isLastRound = round.round_number >= room.settings.rounds;
 
   useEffect(() => {
     let active = true;
@@ -85,16 +87,25 @@ function RevealScreen({
   async function handleNextRound() {
     if (startingNextRound) return;
 
-    // Laatste ronde gespeeld: de echte eindstand-flow is een aparte stap,
-    // dit is voorlopig enkel een lokale placeholder voor de host die op de
-    // knop klikte.
-    if (round.round_number >= room.settings.rounds) {
-      setGameEnded(true);
-      return;
-    }
-
     setStartingNextRound(true);
     setNextRoundError(null);
+
+    const supabase = createClient();
+
+    // Laatste ronde gespeeld: het spel sluit af in plaats van een nieuwe
+    // ronde te starten. rooms.status komt terug op 'finished' via het
+    // bestaande Realtime-kanaal, dat schakelt dan bij iedereen automatisch
+    // over naar het Einde-spel-scherm.
+    if (isLastRound) {
+      const { error } = await updateRoomStatus(supabase, room.id, "finished");
+
+      if (error) {
+        console.error("updateRoomStatus failed:", error);
+        setNextRoundError("Kon het spel niet afsluiten.");
+        setStartingNextRound(false);
+      }
+      return;
+    }
 
     // Iedereen behalve de net afgelopen tekenaar komt in aanmerking; bij
     // precies 2 spelers is dat vanzelfsprekend altijd de ander.
@@ -105,7 +116,6 @@ function RevealScreen({
     const nextDrawer =
       drawerPool[Math.floor(Math.random() * drawerPool.length)];
 
-    const supabase = createClient();
     const { error } = await createRound(supabase, {
       roomId: room.id,
       roundNumber: round.round_number + 1,
@@ -240,18 +250,18 @@ function RevealScreen({
         })}
       </div>
 
-      {gameEnded ? (
-        <p className="text-center text-sm font-medium text-ink">
-          Spel afgelopen
-        </p>
-      ) : isHost ? (
+      {isHost ? (
         <div className="flex flex-col items-center gap-2">
           <Button
             className="h-12 w-full rounded-xl text-base font-bold"
             disabled={startingNextRound}
             onClick={handleNextRound}
           >
-            {startingNextRound ? "Even geduld…" : "Volgende ronde"}
+            {startingNextRound
+              ? "Even geduld…"
+              : isLastRound
+                ? "Einde spel"
+                : "Volgende ronde"}
           </Button>
           {nextRoundError && (
             <p className="text-center text-sm text-error">{nextRoundError}</p>
@@ -259,7 +269,9 @@ function RevealScreen({
         </div>
       ) : (
         <p className="text-center text-sm text-neutral">
-          Wachten tot de host de volgende ronde start...
+          {isLastRound
+            ? "Wachten tot de host het spel afsluit..."
+            : "Wachten tot de host de volgende ronde start..."}
         </p>
       )}
     </div>

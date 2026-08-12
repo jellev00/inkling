@@ -10,7 +10,14 @@ import type { PlayerColor } from "@/components/player-avatar";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/supabase/session-context";
-import { addPlayer, getPlayerCount, getRoomByCode, type Room } from "@/lib/supabase/queries";
+import {
+  addPlayer,
+  getPlayerByAuthUserId,
+  getPlayerCount,
+  getRoomByCode,
+  rejoinPlayer,
+  type Room,
+} from "@/lib/supabase/queries";
 
 function JoinRoomScreen({ code }: { code: string }) {
   const router = useRouter();
@@ -98,22 +105,61 @@ function JoinRoomScreen({ code }: { code: string }) {
       return;
     }
 
+    if (freshRoom.status === "finished") {
+      // Geen players-rij aanmaken voor een spel dat al voorbij is — anders
+      // duikt deze speler met score 0 op tussen de eindstand. LobbyScreen
+      // toont in dat geval een korte melding in plaats van het scherm.
+      router.push(`/room/${freshRoom.code}`);
+      return;
+    }
+
     // await voor user
-    const { data: { user } } = await supabase.auth.getUser();
+    // const { data: { user } } = await supabase.auth.getUser();
 
-    const { error: playerError } = await addPlayer(supabase, {
-      authUserId: userId,
-      roomId: freshRoom.id,
-      name: trimmedName,
-      avatarColor: color,
-      isHost: false,
-    });
+    const { data: { user } } = await supabase.auth.getUser(); console.log('auth user:', user?.id, '| userId uit context:', userId);
 
-    if (playerError) {
-      console.error("addPlayer failed:", playerError);
-      setError(playerError.message ?? "Joinen is niet gelukt.");
+    // Kijk of er al een players-rij is voor deze (room, gebruiker) —
+    // mogelijk eerder vertrokken (left_at gezet). Update die dan i.p.v.
+    // een nieuwe insert te proberen, anders knalt de unique constraint op
+    // (room_id, auth_user_id).
+    const { data: existingPlayer, error: existingPlayerError } =
+      await getPlayerByAuthUserId(supabase, freshRoom.id, userId);
+
+    if (existingPlayerError) {
+      console.error("getPlayerByAuthUserId failed:", existingPlayerError);
+      setError(existingPlayerError.message ?? "Joinen is niet gelukt.");
       setSubmitting(false);
       return;
+    }
+
+    if (existingPlayer) {
+      const { error: rejoinError } = await rejoinPlayer(
+        supabase,
+        existingPlayer.id,
+        { name: trimmedName, avatarColor: color }
+      );
+
+      if (rejoinError) {
+        console.error("rejoinPlayer failed:", rejoinError);
+        setError(rejoinError.message ?? "Joinen is niet gelukt.");
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      const { error: playerError } = await addPlayer(supabase, {
+        authUserId: userId,
+        roomId: freshRoom.id,
+        name: trimmedName,
+        avatarColor: color,
+        isHost: false,
+      });
+
+      if (playerError) {
+        console.error("addPlayer failed:", playerError);
+        setError(playerError.message ?? "Joinen is niet gelukt.");
+        setSubmitting(false);
+        return;
+      }
     }
 
     router.push(`/room/${freshRoom.code}`);

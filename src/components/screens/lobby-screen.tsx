@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PlayerAvatar, type PlayerColor } from "@/components/player-avatar";
 import { RoomcodeCard } from "@/components/roomcode-badge";
 import { ScreenHeader } from "@/components/screen-header";
+import { EndGameScreen } from "@/components/screens/end-game-screen";
 import { RoundScreen } from "@/components/screens/round-screen";
 import { Button } from "@/components/ui/button";
 import { playSound } from "@/lib/sound";
@@ -98,6 +99,14 @@ function LobbyScreen({ code }: { code: string }) {
             setRoom((current) =>
               current ? { ...current, status: nextStatus } : current
             );
+
+            // Na een herstart via 'Nog een keer' landt iedereen hier terug
+            // zonder dat LobbyScreen opnieuw mount — zonder deze reset
+            // blijft "Spel starten" hangen op "Even geduld…" van de vorige
+            // keer.
+            if (nextStatus === "lobby") {
+              setStarting(false);
+            }
           }
         }
       )
@@ -144,13 +153,31 @@ function LobbyScreen({ code }: { code: string }) {
         },
         (payload) => {
           // Vangt o.a. score-wijzigingen op die submit-guess server-side
-          // doorvoert — zonder dit blijft het scorebord stil staan.
+          // doorvoert — zonder dit blijft het scorebord stil staan. Vangt
+          // ook het soft-delete leave/rejoin-patroon op: left_at gezet
+          // betekent uit de zichtbare lijst, left_at teruggezet op null
+          // (bij een speler die nog niet lokaal zichtbaar was) betekent
+          // terug toevoegen.
           const updatedPlayer = payload.new as Player;
-          setPlayers((current) =>
-            current.map((player) =>
+
+          setPlayers((current) => {
+            if (updatedPlayer.left_at) {
+              return current.filter(
+                (player) => player.id !== updatedPlayer.id
+              );
+            }
+
+            const exists = current.some(
+              (player) => player.id === updatedPlayer.id
+            );
+            if (!exists) {
+              return [...current, updatedPlayer];
+            }
+
+            return current.map((player) =>
               player.id === updatedPlayer.id ? updatedPlayer : player
-            )
-          );
+            );
+          });
         }
       )
       .on(
@@ -197,6 +224,7 @@ function LobbyScreen({ code }: { code: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id]);
 
+  const myPlayer = players.find((player) => player.auth_user_id === userId);
   const isHost = players.some(
     (player) => player.auth_user_id === userId && player.is_host
   );
@@ -259,6 +287,33 @@ function LobbyScreen({ code }: { code: string }) {
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (room.status === "finished" && !myPlayer) {
+    // Net gejoind terwijl het spel al afgelopen was (zie JoinRoomScreen,
+    // die in dat geval geen players-rij aanmaakt) — geen eindstand tonen
+    // waar deze speler met score 0 tussen zou staan.
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
+        <ScreenHeader />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-neutral">
+            Dit spel is afgelopen — wacht tot de host een nieuwe ronde start.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (room.status === "finished") {
+    return (
+      <EndGameScreen
+        room={room}
+        players={players}
+        isHost={isHost}
+        userId={userId}
+      />
     );
   }
 
