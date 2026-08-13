@@ -94,8 +94,16 @@ function GameScreen({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-6 lg:flex-row">
-        <div className="flex flex-1 flex-col gap-4">
+      {/*
+        Mobiel (< md): canvas, dan chat, dan spelerslijst — gestapeld op
+        content-hoogte, niets rekt uit tot de resterende viewporthoogte.
+        De sidebar-wrapper wordt op mobiel `contents` zodat de spelerslijst
+        en GuessPanel als losse flex-items van deze kolom herordend kunnen
+        worden met `order`; vanaf md geldt weer de originele naast-elkaar
+        layout (canvas + vaste-breedte zijbalk).
+      */}
+      <div className="flex flex-col gap-6 md:flex-1 lg:flex-row">
+        <div className="flex flex-col gap-4 max-md:order-1 md:flex-1">
           <WordSlots letters={letters} />
 
           {isDrawer && !word && (
@@ -108,8 +116,8 @@ function GameScreen({
           <CanvasBoard interactive={isDrawer} roundId={round.id} />
         </div>
 
-        <div className="flex w-full flex-col gap-4 lg:w-80">
-          <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4">
+        <div className="flex w-full flex-col gap-4 max-md:contents lg:w-80">
+          <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4 max-md:order-3">
             {sortedPlayers.map((player) => (
               <div
                 key={player.id}
@@ -140,6 +148,7 @@ function GameScreen({
             roundId={round.id}
             canGuess={!isDrawer}
             myName={myPlayer?.name ?? "Jij"}
+            className="max-md:order-2"
           />
         </div>
       </div>

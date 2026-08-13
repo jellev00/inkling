@@ -31,14 +31,25 @@ function GuessPanel({
   roundId,
   canGuess,
   myName,
+  className,
 }: {
   roundId: string;
   canGuess: boolean;
   myName: string;
+  className?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [value, setValue] = useState("");
   const messageIdRef = useRef(0);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Scrollt enkel de berichtenlijst zelf naar het nieuwste bericht (block:
+  // "nearest" voorkomt dat de hele pagina meescrollt) — de gebruiker kan
+  // intussen vrij omhoog scrollen om oudere berichten te herlezen; bij het
+  // eerstvolgende nieuwe bericht springt de lijst gewoon weer naar beneden.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [messages]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -125,8 +136,13 @@ function GuessPanel({
   }
 
   return (
-    <div className="flex flex-1 flex-col rounded-2xl border border-neutral/30 bg-white">
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+    <div
+      className={cn(
+        "flex flex-col rounded-2xl border border-neutral/30 bg-white md:flex-1",
+        className
+      )}
+    >
+      <div className="max-md:max-h-64 flex-1 space-y-2 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <p className="text-sm text-neutral">Nog geen gokken...</p>
         ) : (
@@ -159,6 +175,7 @@ function GuessPanel({
             );
           })
         )}
+        <div ref={bottomRef} />
       </div>
 
       {canGuess && (
