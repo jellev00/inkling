@@ -15,7 +15,7 @@ function ColorSwatchPicker({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" className={cn("flex gap-2.5", className)}>
+    <div role="radiogroup" className={cn("flex flex-wrap gap-2.5", className)}>
       {COLORS.map((color) => (
         <button
           key={color}

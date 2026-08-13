@@ -373,7 +373,7 @@ function CanvasBoard({
     <div className={cn("flex flex-col gap-3", className)}>
       <div
         ref={containerRef}
-        className="aspect-4/3 w-full overflow-hidden rounded-2xl border border-neutral/30 bg-white"
+        className="aspect-4/3 w-full overflow-hidden rounded-2xl border border-neutral/30 bg-white lg:aspect-auto lg:h-125"
       >
         <canvas
           ref={canvasRef}

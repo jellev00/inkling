@@ -172,7 +172,7 @@ function RevealScreen({
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-16">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 bg-canvas px-6 py-16">
       <div className="flex flex-col items-center gap-1 text-center">
         <p className="text-base text-ink">Het woord was</p>
         {wordError ? (

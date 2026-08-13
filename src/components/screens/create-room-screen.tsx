@@ -139,7 +139,7 @@ function CreateRoomScreen() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-canvas px-6 py-6">
       <ScreenHeader />
 
       <RoomcodeCard code={code ?? "••••"} label="Jouw roomcode" />
@@ -153,7 +153,7 @@ function CreateRoomScreen() {
 
       <Card className="relative overflow-hidden rounded-2xl border-neutral/30">
         <Squiggle
-          className="pointer-events-none absolute -right-10 bottom-2 w-48 opacity-60"
+          className="pointer-events-none absolute top-1/2 left-1/2 hidden w-64 -translate-x-1/2 -translate-y-1/2 opacity-60 min-[768px]:block"
           strokeClassName="stroke-neutral"
           dotClassName="fill-energy/40"
         />
@@ -182,7 +182,7 @@ function CreateRoomScreen() {
             {categories === null ? (
               <p className="text-sm text-neutral">Categorieën laden…</p>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {categories.map((option) => (
                   <button
                     key={option}

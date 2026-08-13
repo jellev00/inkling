@@ -27,14 +27,14 @@ function LandingScreen() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-between bg-canvas px-6 py-16">
-      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+    <div className="flex flex-1 flex-col items-center justify-center gap-20 bg-canvas px-6 py-16">
+      <div className="flex flex-col items-center justify-center gap-4">
         <h1 className="font-caveat text-7xl font-bold text-primary">
           Inkling
         </h1>
         <p className="text-lg text-ink/70">Draw fast. guess faster</p>
         <Squiggle
-          className="mt-16 w-64"
+          className="mt-16 w-full pl-8"
           strokeClassName="stroke-ink"
           dotClassName="fill-energy"
         />

@@ -311,7 +311,7 @@ function LobbyScreen({ code }: { code: string }) {
 
   if (notFound || !room) {
     return (
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-canvas px-6 py-6">
         <ScreenHeader />
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
           <p className="text-lg font-bold text-ink">Room niet gevonden</p>
@@ -328,7 +328,7 @@ function LobbyScreen({ code }: { code: string }) {
     // die in dat geval geen players-rij aanmaakt) — geen eindstand tonen
     // waar deze speler met score 0 tussen zou staan.
     return (
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-canvas px-6 py-6">
         <ScreenHeader />
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
           <p className="text-sm text-neutral">
@@ -357,7 +357,7 @@ function LobbyScreen({ code }: { code: string }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 bg-canvas px-6 py-6">
       <ScreenHeader />
 
       <RoomcodeCard code={room.code} label="Jouw roomcode" />

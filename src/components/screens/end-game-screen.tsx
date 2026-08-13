@@ -126,7 +126,7 @@ function EndGameScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 bg-canvas px-6 py-16">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 bg-canvas px-6 py-16">
       <h1 className="text-center font-caveat text-5xl font-bold text-primary">
         Spel voorbij
       </h1>

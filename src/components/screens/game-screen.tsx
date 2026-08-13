@@ -8,7 +8,6 @@ import { PlayerAvatar, type PlayerColor } from "@/components/player-avatar";
 import { RoomcodeCompact } from "@/components/roomcode-badge";
 import { RoundTimer } from "@/components/round-timer";
 import { GuessPanel } from "@/components/screens/guess-panel";
-import { Badge } from "@/components/ui/badge";
 import { WordSlots } from "@/components/word-slots";
 import { isMuted, setMuted as persistMuted } from "@/lib/sound";
 import { createClient } from "@/lib/supabase/client";
@@ -72,7 +71,9 @@ function GameScreen({
           <span className="text-sm text-neutral">
             Ronde {round.round_number}/{room.settings.rounds}
           </span>
-          <Badge variant="outline">{room.settings.category}</Badge>
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+            {room.settings.category}
+          </span>
           <RoundTimer endsAt={round.ends_at} />
           <button
             type="button"
@@ -101,55 +102,69 @@ function GameScreen({
         en GuessPanel als losse flex-items van deze kolom herordend kunnen
         worden met `order`; vanaf md geldt weer de originele naast-elkaar
         layout (canvas + vaste-breedte zijbalk).
+
+        Desktop (lg): de rij zelf krijgt geen expliciete hoogte
+        (lg:flex-none annuleert de md:flex-1-groei) — de hoogte volgt uit de
+        linkerkolom (woord + canvas + tools), en lg:items-stretch rekt de
+        zijbalk daar precies tot uit. De buitenste wrapper centreert dat
+        geheel (beide kolommen samen) horizontaal én verticaal in de
+        viewport i.p.v. linksboven te beginnen met lege ruimte eronder.
+        lg:w-full lg:max-w-5xl op de rij zelf is nodig omdat een flex-item
+        van een justify-center-container anders krimpt tot zijn kleinst
+        mogelijke inhoud — zonder die breedte heeft md:flex-1 op de
+        linkerkolom niets om in te groeien, en krimpen canvas én zijbalk
+        mee.
       */}
-      <div className="flex flex-col gap-6 md:flex-1 lg:flex-row">
-        <div className="flex flex-col gap-4 max-md:order-1 md:flex-1">
-          <WordSlots letters={letters} />
+      <div className="lg:flex lg:min-h-full lg:items-center lg:justify-center">
+        <div className="flex flex-col gap-6 md:flex-1 lg:w-full lg:max-w-5xl lg:flex-none lg:flex-row lg:items-stretch">
+          <div className="flex flex-col gap-4 max-md:order-1 md:flex-1">
+            <WordSlots letters={letters} />
 
-          {isDrawer && !word && (
-            <p className="text-center text-xs text-error">
-              Woord niet beschikbaar (dit kan gebeuren als je tijdens het
-              tekenen ververst).
-            </p>
-          )}
+            {isDrawer && !word && (
+              <p className="text-center text-xs text-error">
+                Woord niet beschikbaar (dit kan gebeuren als je tijdens het
+                tekenen ververst).
+              </p>
+            )}
 
-          <CanvasBoard interactive={isDrawer} roundId={round.id} />
-        </div>
-
-        <div className="flex w-full flex-col gap-4 max-md:contents lg:w-80">
-          <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4 max-md:order-3">
-            {sortedPlayers.map((player) => (
-              <div
-                key={player.id}
-                className="flex items-center gap-3 px-1 py-1.5"
-              >
-                <PlayerAvatar
-                  name={player.name}
-                  color={player.avatar_color as PlayerColor}
-                  size="md"
-                />
-                <span className="text-base font-medium text-ink">
-                  {player.name}
-                </span>
-                <span className="ml-auto flex items-center gap-1.5 text-base text-ink">
-                  {player.id === round.drawer_id && (
-                    <Icon
-                      name="paintbrush"
-                      className="size-3.5 text-neutral"
-                    />
-                  )}
-                  {player.score}
-                </span>
-              </div>
-            ))}
+            <CanvasBoard interactive={isDrawer} roundId={round.id} />
           </div>
 
-          <GuessPanel
-            roundId={round.id}
-            canGuess={!isDrawer}
-            myName={myPlayer?.name ?? "Jij"}
-            className="max-md:order-2"
-          />
+          <div className="flex w-full flex-col gap-4 max-md:contents lg:w-80">
+            <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4 max-md:order-3">
+              {sortedPlayers.map((player) => (
+                <div
+                  key={player.id}
+                  className="flex items-center gap-3 px-1 py-1.5"
+                >
+                  <PlayerAvatar
+                    name={player.name}
+                    color={player.avatar_color as PlayerColor}
+                    size="md"
+                  />
+                  <span className="text-base font-medium text-ink">
+                    {player.name}
+                  </span>
+                  <span className="ml-auto flex items-center gap-1.5 text-base text-ink">
+                    {player.id === round.drawer_id && (
+                      <Icon
+                        name="paintbrush"
+                        className="size-3.5 text-neutral"
+                      />
+                    )}
+                    {player.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <GuessPanel
+              roundId={round.id}
+              canGuess={!isDrawer}
+              myName={myPlayer?.name ?? "Jij"}
+              className="max-md:order-2 lg:min-h-0"
+            />
+          </div>
         </div>
       </div>
     </div>

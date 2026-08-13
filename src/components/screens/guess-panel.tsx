@@ -142,7 +142,14 @@ function GuessPanel({
         className
       )}
     >
-      <div className="max-md:max-h-64 flex-1 space-y-2 overflow-y-auto p-4">
+      {/*
+        lg:min-h-0 is nodig naast lg:flex-1 op de buitenste chatbox: zonder
+        expliciete min-height blijft een flex-item standaard op zijn eigen
+        content-hoogte staan (min-height: auto), waardoor overflow-y-auto
+        hier pas zou scrollen ná het al doorduwen van de kolom voorbij de
+        hoogte van de linkerkolom.
+      */}
+      <div className="max-md:max-h-64 flex-1 space-y-2 overflow-y-auto p-4 lg:min-h-0">
         {messages.length === 0 ? (
           <p className="text-sm text-neutral">Nog geen gokken...</p>
         ) : (
