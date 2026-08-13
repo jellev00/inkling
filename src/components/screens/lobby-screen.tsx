@@ -248,6 +248,10 @@ function LobbyScreen({ code }: { code: string }) {
 
   async function handleStart() {
     if (!room || starting || players.length === 0) return;
+    // Dekt de race waarbij een speler de room verlaat op het exacte moment
+    // dat de host klikt — de disabled-knop alleen is niet genoeg, want die
+    // state kan al stale zijn tegen de tijd dat deze handler uitvoert.
+    if (players.length < 2) return;
 
     setStarting(true);
     setError(null);
@@ -392,14 +396,21 @@ function LobbyScreen({ code }: { code: string }) {
       {error && <p className="text-center text-sm text-error">{error}</p>}
 
       {isHost ? (
-        <Button
-          size="lg"
-          className="h-14 w-full rounded-xl text-base font-bold"
-          disabled={starting}
-          onClick={handleStart}
-        >
-          {starting ? "Even geduld…" : "Spel starten"}
-        </Button>
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            size="lg"
+            className="h-14 w-full rounded-xl text-base font-bold"
+            disabled={starting || players.length < 2}
+            onClick={handleStart}
+          >
+            {starting ? "Even geduld…" : "Spel starten"}
+          </Button>
+          {players.length < 2 && (
+            <p className="text-center text-xs text-neutral">
+              Wacht op nog minstens 1 speler...
+            </p>
+          )}
+        </div>
       ) : (
         <p className="text-center text-xs text-neutral">
           Wachten tot de host het spel start…
