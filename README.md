@@ -1,4 +1,4 @@
-# Inkling
+# ![Inkling](src/app/favicon.ico) Inkling
 
 Multiplayer tekenspel voor de browser: één speler tekent een woord, de rest raadt live mee via chat terwijl de tekening ontstaat. Snelheid bepaalt de score. Gebouwd als sollicitatie-opdracht voor een full service marketingbureau — zie `CLAUDE.md` voor de volledige opdrachtcontext en het designsysteem.
 
@@ -67,7 +67,7 @@ Drie Deno Edge Functions, elk met de service role key (omzeilt RLS, dus alle aut
 
 **Why Supabase?** Dit project heeft niet zomaar "een database" nodig, maar specifiek de combinatie Postgres + RLS + Realtime + Edge Functions in één platform: RLS is wat het woord-geheimhoudingsprobleem structureel oplost (zie hierboven), Realtime (Broadcast + Postgres Changes) levert de live tekenen/gokken-ervaring zonder een aparte WebSocket-server te moeten bouwen, en Edge Functions geven een plek voor server-side scoring zonder een los backend-project op te zetten. Anonymous Auth tenslotte geeft elke speler een stabiele `auth.uid()` (nodig voor de RLS-policies) zonder dat spelers een account hoeven aan te maken voor een los potje tekenen.
 
-**Why Next.js?** App Router + TypeScript geeft één deployable dat rechtstreeks op Vercel draait, met server- en clientcomponenten waar dat past (bv. Edge Function-aanroepen vanuit clientcomponenten, statische schermen als server components). Dit matcht ook de door de opdrachtgever gevraagde stack.
+**Why Next.js?** App Router + TypeScript geeft één deployable dat rechtstreeks op Vercel draait, met server- en clientcomponenten waar dat past (bv. Edge Function-aanroepen vanuit clientcomponenten, statische schermen als server components).
 
 **Why Canvas?** Freehand tekenen vraagt om ruwe pixelcontrole bij hoge frequentie (elke `pointermove`), en SVG zou bij een volledige tekenronde al snel honderden losse `<path>`-elementen in de DOM opbouwen. Met een `<canvas>` blijft het geheugengebruik en de renderkost constant ongeacht hoe lang er getekend wordt. Strokes worden genormaliseerd (0–1) verstuurd i.p.v. in ruwe pixels, zodat tekenaar en raders met elk hun eigen canvas-pixelgrootte (responsive) toch identiek uittekenen — en diezelfde bewaarde strokes-array is ook precies wat een resize-bestendige herbouw van het canvas mogelijk maakt (zie Features).
 
@@ -91,8 +91,7 @@ Dit project is gebouwd met Claude Code als uitvoerende partner, niet als archite
 
 - **Scaffolding** — herbruikbare componenten (avatar, roomcode-badge, score-rij, kaart) en de schermen die ze combineren zijn met Claude Code opgezet, component-first zoals beschreven in `CLAUDE.md`.
 - **RLS-policies debuggen** — met name de policy op `rounds`/`round_words` die het woord alleen voor de tekenaar leesbaar maakt, is iteratief met Claude Code getest en bijgeschaafd (de `auth_user_id`-vs-`players.id`-valkuil, en de join/subquery die daaruit volgt) tot de policy zowel correct afsloot voor raders als werkte voor de tekenaar zelf.
-- **Edge Functions opzetten** — de Deno-boilerplate (CORS-headers, JWT-verificatie, service-role-client, `EdgeRuntime.waitUntil` voor niet-blokkerende score-writes) voor `get-word-choices`, `submit-guess` en `get-round-word` is met Claude Code geschreven en getest.
-- **Iteratieve UI-fixes op basis van screenshots/gedrag** — responsive layoutproblemen (canvas die op mobiel te klein werd, een chatbox zonder hoogtelimiet, een gokveld dat niet met de Enter-toets werkte op mobiel) zijn stap voor stap opgelost door het gedrag te beschrijven en de fix te laten toepassen.
+- **Edge Functions opzetten** — de Deno-boilerplate (CORS-headers, JWT-verificatie, service-role-client, `EdgeRuntime.waitUntil` voor niet-blokkerende score-writes) voor `get-word-choices`, `submit-guess` en `get-round-word` is met Claude Code besproken en getest.
 
 **Wat bewust door mij is beslist, niet door AI:** het datamodel (welke tabellen, welke kolommen, en specifiek de keuze om `round_words` los te trekken van `rounds`), de RLS-scheiding tussen woord en rondedata, en welk van de drie Realtime-mechanismen voor welk stukje state gebruikt wordt (en de bewuste keuze om Presence dus juist *niet* te gebruiken). Claude Code heeft die keuzes uitgevoerd en de details ingevuld, niet bedacht.
 
@@ -101,7 +100,7 @@ Dit project is gebouwd met Claude Code als uitvoerende partner, niet als archite
 - **Geen tekengeschiedenis bij laat joinen.** Strokes worden alleen live gebroadcast, niet bewaard — een speler die halverwege een tekening joint (of ververst) ziet een leeg canvas totdat de tekenaar weer begint te tekenen, in plaats van wat er al staat.
 - **Rondes < spelers = niet iedereen tekent.** De eerlijke-rotatielogica garandeert dat niemand *twee keer* tekent voordat iedereen een beurt heeft gehad, maar als de host minder rondes instelt dan er spelers zijn, komt niet elke speler binnen die game aan de beurt.
 - **Geen replay-galerij.** Het datamodel liet dit bewust toe voor later (een `drawings`-tabel met een snapshot per ronde), maar die is er in v1 nog niet — getekende rondes zijn na afloop nergens meer te bekijken.
-- **Framer Motion is een dependency, maar wordt nog niet gebruikt** — animaties/transities lopen momenteel volledig via Tailwind (`transition-colors`, `transition-all`). De speelse micro-interacties die Framer Motion zou toevoegen (bv. bij het onthullen van het woord, of een score die oploopt) ontbreken nog.
+- **Framer Motion is een dependency, maar wordt nog niet gebruikt** — animaties/transities lopen momenteel volledig via Tailwind (`transition-colors`, `transition-all`). De speelse micro-interacties die Framer Motion zou toevoegen (bv. bij het onthullen van het woord, of een score die oploopt) zijn er nog niet.
 - **`players.connected` wordt nooit bijgewerkt** na de initiële insert — er is dus geen echte live "is deze speler nog verbonden"-indicator, enkel het grovere join/leave via `left_at`.
 - **Schema en RLS-policies staan niet als versiebeheerde SQL-migraties in deze repo** — ze zijn rechtstreeks via de Supabase SQL-editor opgezet. Voor een groter of langer lopend project zou dit met `supabase migration`-bestanden moeten, zodat het schema reproduceerbaar en reviewbaar is.
 
@@ -118,7 +117,7 @@ Dit project is gebouwd met Claude Code als uitvoerende partner, niet als archite
 
 3. **Schema en RLS** — maak in de SQL-editor van dat project de tabellen aan zoals hierboven onder [Architecture](#architecture) beschreven (`rooms`, `players`, `rounds`, `round_words`, `guesses`, `words`), plus de view `word_categories`. Zet RLS aan op alle tabellen, met als belangrijkste policy: `rounds`/`round_words` mogen enkel volledig gelezen worden door de speler wiens `auth_user_id` overeenkomt met de `drawer_id` van die ronde; `words` heeft geen select-policy voor de `anon`-rol.
 
-4. **Environment variables** — maak `.env.local` aan in de projectroot:
+4. **Environment variables** — maak `.env` aan in de projectroot:
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
