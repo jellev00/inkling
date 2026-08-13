@@ -109,10 +109,36 @@ Deno.serve(async (req) => {
   const category =
     (room.settings as { category?: string } | null)?.category ?? "Algemeen";
 
-  const { data: words, error: wordsError } = await supabase
-    .from("words")
-    .select("word")
-    .eq("category", category);
+  // round_words gekoppeld aan rounds waar rounds.room_id de room van deze
+  // ronde is — alle woorden die deze room in eerdere rondes al gebruikt
+  // heeft, mogen niet opnieuw als keuze verschijnen.
+  const { data: usedWordRows, error: usedWordsError } = await supabase
+    .from("round_words")
+    .select("word, rounds!inner(room_id)")
+    .eq("rounds.room_id", round.room_id);
+
+  if (usedWordsError) {
+    return jsonResponse(
+      { error: "Kon eerder gebruikte woorden niet ophalen." },
+      500
+    );
+  }
+
+  const usedWords = (usedWordRows ?? []).map(
+    (row) => (row as { word: string }).word
+  );
+
+  let wordsQuery = supabase.from("words").select("word").eq("category", category);
+
+  if (usedWords.length > 0) {
+    wordsQuery = wordsQuery.not(
+      "word",
+      "in",
+      `(${usedWords.map((word) => JSON.stringify(word)).join(",")})`
+    );
+  }
+
+  const { data: words, error: wordsError } = await wordsQuery;
 
   if (wordsError) {
     return jsonResponse({ error: "Kon geen woorden ophalen." }, 500);
