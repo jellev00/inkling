@@ -138,7 +138,7 @@ function GuessPanel({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-2xl border border-neutral/30 bg-white md:flex-1",
+        "flex flex-col rounded-2xl border border-neutral/30 bg-white lg:flex-1",
         className
       )}
     >
@@ -149,7 +149,7 @@ function GuessPanel({
         hier pas zou scrollen ná het al doorduwen van de kolom voorbij de
         hoogte van de linkerkolom.
       */}
-      <div className="max-md:max-h-64 flex-1 space-y-2 overflow-y-auto p-4 lg:min-h-0">
+      <div className="max-lg:max-h-64 flex-1 space-y-2 overflow-y-auto p-4 lg:min-h-0">
         {messages.length === 0 ? (
           <p className="text-sm text-neutral">Nog geen gokken...</p>
         ) : (

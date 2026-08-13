@@ -47,7 +47,7 @@ function PodiumColumn({ player, rank }: { player: Player; rank: 1 | 2 | 3 }) {
       <PlayerAvatar name={player.name} color={color} size={rank === 1 ? "md" : "sm"} />
       <span
         className={cn(
-          "text-sm text-ink",
+          "text-sm text-ink text-center",
           rank === 1 ? "font-bold" : "font-medium"
         )}
       >

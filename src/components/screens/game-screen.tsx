@@ -96,28 +96,28 @@ function GameScreen({
       </div>
 
       {/*
-        Mobiel (< md): canvas, dan chat, dan spelerslijst — gestapeld op
-        content-hoogte, niets rekt uit tot de resterende viewporthoogte.
-        De sidebar-wrapper wordt op mobiel `contents` zodat de spelerslijst
-        en GuessPanel als losse flex-items van deze kolom herordend kunnen
-        worden met `order`; vanaf md geldt weer de originele naast-elkaar
-        layout (canvas + vaste-breedte zijbalk).
+        Mobiel (< lg, dus ook tablets in portret-stand): canvas, dan chat,
+        dan spelerslijst — gestapeld op content-hoogte, niets rekt uit tot
+        de resterende viewporthoogte. De sidebar-wrapper wordt in dat
+        bereik `contents` zodat de spelerslijst en GuessPanel als losse
+        flex-items van deze kolom herordend kunnen worden met `order`;
+        vanaf lg geldt weer de originele naast-elkaar layout (canvas +
+        vaste-breedte zijbalk).
 
-        Desktop (lg): de rij zelf krijgt geen expliciete hoogte
-        (lg:flex-none annuleert de md:flex-1-groei) — de hoogte volgt uit de
-        linkerkolom (woord + canvas + tools), en lg:items-stretch rekt de
-        zijbalk daar precies tot uit. De buitenste wrapper centreert dat
-        geheel (beide kolommen samen) horizontaal én verticaal in de
-        viewport i.p.v. linksboven te beginnen met lege ruimte eronder.
-        lg:w-full lg:max-w-5xl op de rij zelf is nodig omdat een flex-item
-        van een justify-center-container anders krimpt tot zijn kleinst
-        mogelijke inhoud — zonder die breedte heeft md:flex-1 op de
-        linkerkolom niets om in te groeien, en krimpen canvas én zijbalk
-        mee.
+        Desktop (lg, 1024px+): de rij zelf krijgt geen expliciete hoogte —
+        de hoogte volgt uit de linkerkolom (woord + canvas + tools), en
+        lg:items-stretch rekt de zijbalk daar precies tot uit. De buitenste
+        wrapper centreert dat geheel (beide kolommen samen) horizontaal én
+        verticaal in de viewport i.p.v. linksboven te beginnen met lege
+        ruimte eronder. lg:w-full lg:max-w-5xl op de rij zelf is nodig
+        omdat een flex-item van een justify-center-container anders krimpt
+        tot zijn kleinst mogelijke inhoud — zonder die breedte heeft
+        lg:flex-1 op de linkerkolom niets om in te groeien, en krimpen
+        canvas én zijbalk mee.
       */}
       <div className="lg:flex lg:min-h-full lg:items-center lg:justify-center">
-        <div className="flex flex-col gap-6 md:flex-1 lg:w-full lg:max-w-5xl lg:flex-none lg:flex-row lg:items-stretch">
-          <div className="flex flex-col gap-4 max-md:order-1 md:flex-1">
+        <div className="flex flex-col gap-6 lg:w-full lg:max-w-5xl lg:flex-none lg:flex-row lg:items-stretch">
+          <div className="flex flex-col gap-4 max-lg:order-1 lg:flex-1">
             <WordSlots letters={letters} />
 
             {isDrawer && !word && (
@@ -130,8 +130,8 @@ function GameScreen({
             <CanvasBoard interactive={isDrawer} roundId={round.id} />
           </div>
 
-          <div className="flex w-full flex-col gap-4 max-md:contents lg:w-80">
-            <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4 max-md:order-3">
+          <div className="flex w-full flex-col gap-4 max-lg:contents lg:w-80">
+            <div className="flex flex-col gap-1.5 rounded-2xl border border-neutral/30 bg-white p-4 max-lg:order-3">
               {sortedPlayers.map((player) => (
                 <div
                   key={player.id}
@@ -162,7 +162,7 @@ function GameScreen({
               roundId={round.id}
               canGuess={!isDrawer}
               myName={myPlayer?.name ?? "Jij"}
-              className="max-md:order-2 lg:min-h-0"
+              className="max-lg:order-2 lg:min-h-0"
             />
           </div>
         </div>
