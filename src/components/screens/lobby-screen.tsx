@@ -8,6 +8,7 @@ import { ScreenHeader } from "@/components/screen-header";
 import { EndGameScreen } from "@/components/screens/end-game-screen";
 import { RoundScreen } from "@/components/screens/round-screen";
 import { Button } from "@/components/ui/button";
+import { shuffleDrawOrder } from "@/lib/draw-order";
 import { playSound } from "@/lib/sound";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/supabase/session-context";
@@ -17,9 +18,11 @@ import {
   getCurrentRound,
   getRoomByCode,
   listPlayers,
+  updateRoomSettings,
   updateRoomStatus,
   type Player,
   type Room,
+  type RoomSettings,
   type Round,
 } from "@/lib/supabase/queries";
 
@@ -94,17 +97,30 @@ function LobbyScreen({ code }: { code: string }) {
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          const nextStatus = (payload.new as { status?: string }).status;
-          if (nextStatus) {
+          const next = payload.new as {
+            status?: string;
+            settings?: RoomSettings;
+          };
+          if (next.status) {
+            // settings meenemen is nodig zodra de host bij 'Spel starten'
+            // de geschudde drawOrder wegschrijft — anders blijft de lokale
+            // room-state (bij iedereen, ook de host zelf) op de oude
+            // settings staan en ontbreekt drawOrder in RevealScreen.
             setRoom((current) =>
-              current ? { ...current, status: nextStatus } : current
+              current
+                ? {
+                    ...current,
+                    status: next.status!,
+                    settings: next.settings ?? current.settings,
+                  }
+                : current
             );
 
             // Na een herstart via 'Nog een keer' landt iedereen hier terug
             // zonder dat LobbyScreen opnieuw mount — zonder deze reset
             // blijft "Spel starten" hangen op "Even geduld…" van de vorige
             // keer.
-            if (nextStatus === "lobby") {
+            if (next.status === "lobby") {
               setStarting(false);
             }
           }
@@ -237,11 +253,28 @@ function LobbyScreen({ code }: { code: string }) {
     setError(null);
 
     const supabase = createClient();
-    const drawer = players[Math.floor(Math.random() * players.length)];
+
+    // Eerlijke rotatie: de speellijst wordt hier eenmalig geschud en als
+    // vaste volgorde bewaard, niet bij elke ronde opnieuw willekeurig
+    // bepaald — zie getDrawerId in reveal-screen.tsx voor het vervolg.
+    const drawOrder = shuffleDrawOrder(players);
+
+    const { data: updatedRoom, error: settingsError } = await updateRoomSettings(
+      supabase,
+      room.id,
+      { ...room.settings, drawOrder }
+    );
+
+    if (settingsError || !updatedRoom) {
+      console.error("updateRoomSettings failed:", settingsError);
+      setError(settingsError?.message ?? "Kon de tekenvolgorde niet opslaan.");
+      setStarting(false);
+      return;
+    }
 
     const { data: newRound, error: roundError } = await createRound(
       supabase,
-      { roomId: room.id, roundNumber: 1, drawerId: drawer.id }
+      { roomId: room.id, roundNumber: 1, drawerId: drawOrder[0] }
     );
 
     if (roundError || !newRound) {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { PlayerAvatar, type PlayerColor } from "@/components/player-avatar";
 import { Button } from "@/components/ui/button";
+import { getDrawerId } from "@/lib/draw-order";
 import { createClient } from "@/lib/supabase/client";
 import {
   createRound,
@@ -107,19 +108,23 @@ function RevealScreen({
       return;
     }
 
-    // Iedereen behalve de net afgelopen tekenaar komt in aanmerking; bij
-    // precies 2 spelers is dat vanzelfsprekend altijd de ander.
-    const eligibleDrawers = players.filter(
-      (player) => player.id !== round.drawer_id
+    // Eerlijke rotatie over de vaste volgorde die bij 'Spel starten' één
+    // keer geschud is — garandeert dat iedereen precies één keer tekent
+    // vóór iemand een tweede keer aan de beurt komt, ongeacht het aantal
+    // ingestelde rondes. drawOrder staat sinds ronde 1 vast in
+    // room.settings (zie LobbyScreen.handleStart).
+    const nextDrawerId = getDrawerId(
+      // Deze reveal-ronde bestaat alleen omdat createRound voor ronde 1 al
+      // een drawOrder vereiste (zie LobbyScreen.handleStart) — settings
+      // bevat drawOrder dus gegarandeerd.
+      room.settings.drawOrder!,
+      round.round_number + 1
     );
-    const drawerPool = eligibleDrawers.length > 0 ? eligibleDrawers : players;
-    const nextDrawer =
-      drawerPool[Math.floor(Math.random() * drawerPool.length)];
 
     const { error } = await createRound(supabase, {
       roomId: room.id,
       roundNumber: round.round_number + 1,
-      drawerId: nextDrawer.id,
+      drawerId: nextDrawerId,
     });
 
     if (error) {

@@ -7,6 +7,10 @@ export type RoomSettings = {
   rounds: number;
   timePerRound: number;
   category: string;
+  // Vaste, eenmalig geschudde speelvolgorde (player-id's) — pas gezet bij de
+  // allereerste 'Spel starten'-klik van de host, ontbreekt dus zolang de
+  // room nog in de lobby zit.
+  drawOrder?: string[];
 };
 
 export type Room = {
@@ -185,6 +189,19 @@ export async function updateRoomStatus(
   return supabase
     .from("rooms")
     .update({ status })
+    .eq("id", roomId)
+    .select("id, code, host_id, status, settings, created_at")
+    .single<Room>();
+}
+
+export async function updateRoomSettings(
+  supabase: SupabaseClient,
+  roomId: string,
+  settings: RoomSettings
+) {
+  return supabase
+    .from("rooms")
+    .update({ settings })
     .eq("id", roomId)
     .select("id, code, host_id, status, settings, created_at")
     .single<Room>();
