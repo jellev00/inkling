@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { Icon } from "@/components/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -163,14 +164,22 @@ function GuessPanel({
       {canGuess && (
         <form
           onSubmit={handleSubmit}
-          className="border-t border-neutral/20 p-3"
+          className="flex items-center gap-2 border-t border-neutral/20 p-3"
         >
           <Input
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder="Type je antwoord..."
-            className="h-11 rounded-xl border-none bg-ink px-4 text-white placeholder:text-white/40 focus-visible:ring-primary/50"
+            className="h-11 flex-1 rounded-xl border-none bg-ink px-4 text-white placeholder:text-white/40 focus-visible:ring-primary/50"
           />
+          <button
+            type="submit"
+            aria-label="Verstuur"
+            disabled={!value.trim()}
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-colors disabled:opacity-40"
+          >
+            <Icon name="arrow-left" className="size-4 rotate-180" />
+          </button>
         </form>
       )}
     </div>
