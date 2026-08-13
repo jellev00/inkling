@@ -38,6 +38,18 @@ type StrokePayload = {
   lineWidth: number;
 };
 
+// points hier zijn ook genormaliseerd (0-1), net als in StrokePayload — dit
+// is de volledige tekening tot nu toe (eigen strokes én ontvangen strokes),
+// bewaard zodat een resize het canvas kan herbouwen i.p.v. te vertrouwen op
+// rauwe pixels die bij een canvas.width/height-wijziging verloren gaan.
+type Stroke = {
+  points: Point[];
+  color: string;
+  lineWidth: number;
+};
+
+const RESIZE_DEBOUNCE_MS = 150;
+
 function CanvasBoard({
   interactive,
   roundId,
@@ -69,37 +81,14 @@ function CanvasBoard({
     null
   );
 
+  // Alle strokes tot nu toe (per strokeId), zowel zelf getekend als
+  // ontvangen — enige bron van waarheid om het canvas na een resize
+  // opnieuw op te bouwen.
+  const allStrokesRef = useRef<Map<string, Stroke>>(new Map());
+  const currentStrokeRef = useRef<Stroke | null>(null);
+
   const [color, setColor] = useState(DRAW_COLORS[0].value);
   const [tool, setTool] = useState<"draw" | "eraser">("draw");
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    function resize() {
-      if (!canvas || !container) return;
-      const ratio = window.devicePixelRatio || 1;
-      const rect = container.getBoundingClientRect();
-
-      canvas.width = rect.width * ratio;
-      canvas.height = rect.height * ratio;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.scale(ratio, ratio);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-      }
-
-    }
-
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
 
   const strokeSegment = useCallback(
     (from: Point, to: Point, strokeColor: string, lineWidth: number) => {
@@ -121,6 +110,73 @@ function CanvasBoard({
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
+
+  // Herbouwt het canvas volledig vanuit de bewaarde strokes-array i.p.v.
+  // vanuit de rauwe canvas-pixels, die verloren gaan zodra canvas.width/
+  // height wijzigt (resize/orientation change).
+  const redrawStrokes = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    clearCanvas();
+    for (const stroke of allStrokesRef.current.values()) {
+      const { points } = stroke;
+      for (let i = 1; i < points.length; i++) {
+        strokeSegment(
+          { x: points[i - 1].x * rect.width, y: points[i - 1].y * rect.height },
+          { x: points[i].x * rect.width, y: points[i].y * rect.height },
+          stroke.color,
+          stroke.lineWidth
+        );
+      }
+    }
+  }, [clearCanvas, strokeSegment]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function applyResize() {
+      if (!canvas || !container) return;
+      const ratio = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(ratio, ratio);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+      }
+
+      redrawStrokes();
+    }
+
+    // Wordt tijdens het scrollen op mobiel (adresbalk in/uitschuiven) soms
+    // meerdere keren per seconde getriggerd — debounce zodat we niet bij
+    // elke tussenstap het hele canvas herbouwen.
+    function scheduleResize() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(applyResize, RESIZE_DEBOUNCE_MS);
+    }
+
+    applyResize();
+    window.addEventListener("resize", scheduleResize);
+    window.addEventListener("orientationchange", scheduleResize);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener("resize", scheduleResize);
+      window.removeEventListener("orientationchange", scheduleResize);
+    };
+  }, [redrawStrokes]);
 
   const normalizePoint = useCallback((point: Point): Point | null => {
     const canvas = canvasRef.current;
@@ -193,9 +249,26 @@ function CanvasBoard({
             strokeId: stroke.strokeId,
             point: stroke.points[stroke.points.length - 1],
           };
+
+          // Bewaar de punten ook genormaliseerd, zodat een resize dit
+          // canvas later opnieuw kan opbouwen zonder de tekenaar opnieuw
+          // te hoeven laten uitzenden.
+          const existing = allStrokesRef.current.get(stroke.strokeId);
+          if (existing) {
+            existing.points.push(...stroke.points);
+            existing.color = stroke.color;
+            existing.lineWidth = stroke.lineWidth;
+          } else {
+            allStrokesRef.current.set(stroke.strokeId, {
+              points: [...stroke.points],
+              color: stroke.color,
+              lineWidth: stroke.lineWidth,
+            });
+          }
         })
         .on("broadcast", { event: "clear" }, () => {
           clearCanvas();
+          allStrokesRef.current.clear();
           remoteStrokeRef.current = null;
         });
     }
@@ -232,6 +305,16 @@ function CanvasBoard({
     pendingStyleRef.current = null;
     lastBroadcastAtRef.current = performance.now();
 
+    const strokeColor = tool === "eraser" ? ERASER_COLOR : color;
+    const lineWidth = tool === "eraser" ? 18 : 4;
+    const stroke: Stroke = {
+      points: normalized ? [normalized] : [],
+      color: strokeColor,
+      lineWidth,
+    };
+    currentStrokeRef.current = stroke;
+    allStrokesRef.current.set(strokeIdRef.current, stroke);
+
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -252,6 +335,12 @@ function CanvasBoard({
     if (normalized) {
       pendingPointsRef.current.push(normalized);
       pendingStyleRef.current = { color: strokeColor, lineWidth };
+
+      if (currentStrokeRef.current) {
+        currentStrokeRef.current.points.push(normalized);
+        currentStrokeRef.current.color = strokeColor;
+        currentStrokeRef.current.lineWidth = lineWidth;
+      }
     }
 
     const now = performance.now();
@@ -271,10 +360,12 @@ function CanvasBoard({
     strokeIdRef.current = null;
     pendingPointsRef.current = [];
     pendingStyleRef.current = null;
+    currentStrokeRef.current = null;
   }
 
   function handleClear() {
     clearCanvas();
+    allStrokesRef.current.clear();
     channelRef.current?.send({ type: "broadcast", event: "clear", payload: {} });
   }
 
